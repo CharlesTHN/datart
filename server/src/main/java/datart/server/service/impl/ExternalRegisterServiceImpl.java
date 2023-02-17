@@ -34,16 +34,22 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.ldap.core.AttributesMapper;
 import org.springframework.ldap.core.LdapTemplate;
+import org.springframework.ldap.query.LdapQuery;
 import org.springframework.ldap.query.LdapQueryBuilder;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 
 import javax.mail.MessagingException;
 import java.io.UnsupportedEncodingException;
+import java.util.Collections;
+import java.util.List;
 
 import static datart.core.common.Application.getProperty;
+import static org.springframework.ldap.query.LdapQueryBuilder.query;
 
 @Slf4j
 @Service
@@ -69,8 +75,16 @@ public class ExternalRegisterServiceImpl implements ExternalRegisterService {
     @Override
     public String ldapRegister(String filter, String password) throws MessagingException, UnsupportedEncodingException {
         String usernameAttr = getLdapUsernameAttr();
+        String nameAttr = getLdapNameAttr();
+        String name = null;
+        LdapQuery query = query().filter(String.format("(|(uid=%s)(" + usernameAttr + "=%s))", filter, filter));
         try {
-            ldapTemplate.authenticate(LdapQueryBuilder.query().filter(String.format("(|(uid=%s)("+usernameAttr+"=%s))", filter, filter)), password);
+            ldapTemplate.authenticate(query, password);
+            List<String> search = ldapTemplate.search(query,
+                    (AttributesMapper<String>) attributes -> attributes.get(nameAttr).get().toString());
+            if (!CollectionUtils.isEmpty(search)){
+                name = search.get(0);
+            }
         } catch (Exception e) {
             return null;
         }
@@ -99,6 +113,7 @@ public class ExternalRegisterServiceImpl implements ExternalRegisterService {
         registerParam.setUsername(filter);
         registerParam.setPassword(RandomStringUtils.randomAscii(32));
         registerParam.setEmail(email);
+        registerParam.setName(name);
 
         if (userService.register(registerParam, false)) {
             PasswordToken passwordToken = new PasswordToken(registerParam.getUsername(),
@@ -142,5 +157,9 @@ public class ExternalRegisterServiceImpl implements ExternalRegisterService {
 
     private String getLdapUsernameAttr() {
         return Application.getProperty("spring.ldap.attribute-mapping.username", "cn");
+    }
+
+    private String getLdapNameAttr() {
+        return Application.getProperty("spring.ldap.attribute-mapping.name", "cn");
     }
 }
