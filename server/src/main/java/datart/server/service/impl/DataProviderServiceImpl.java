@@ -22,6 +22,7 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONException;
 import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson.parser.Feature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Sets;
@@ -428,12 +429,12 @@ public class DataProviderServiceImpl extends BaseService implements DataProvider
      * @param model view.model
      */
     private Map<String, Column> parseSchema(String model) {
-        HashMap<String, Column> schema = new HashMap<>();
+        Map<String, Column> schema = new LinkedHashMap<>();
         if (StringUtils.isBlank(model)) {
             return schema;
         }
 
-        JSONObject jsonObject = JSON.parseObject(model);
+        JSONObject jsonObject = JSON.parseObject(model, Feature.OrderedField);
         try {
             if (jsonObject.containsKey("columns")) {
                 jsonObject = jsonObject.getJSONObject("columns");
@@ -452,7 +453,7 @@ public class DataProviderServiceImpl extends BaseService implements DataProvider
                             names = item.getJSONArray("name").toArray(new String[0]);
                         }
                     } else {
-                        names = new String[]{item.getString("name")};
+                        names = new String[]{Optional.ofNullable(item.getString("name")).orElse(key)};
                     }
                     Column column = Column.of(ValueType.valueOf(item.getString("type")), names);
                     schema.put(column.columnKey(), column);
